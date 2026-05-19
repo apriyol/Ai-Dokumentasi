@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Generator Dokumentasi Sederhana - JTTS</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf.js CDN for client-side direct PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=300;400;500;600;700;800&family=Inter:wght=300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Strict Single-Page A4 Setup per sheet */
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        /* Gaya Penampung Kertas Virtual A4 (Berlaku untuk Preview Layar & Ekspor PDF) */
+        .preview-page-container {
+            width: 210mm;
+            height: 290mm; /* Kunci tinggi aman optimal di bawah 297mm untuk mencegah luapan piksel halaman baru */
+            max-height: 290mm;
+            box-sizing: border-box;
+            background-color: #ffffff;
+            padding: 10mm; /* Margin kertas luar */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+
+        /* Mengatasi pergeseran pada Halaman 1 dengan mengubah flexbox menjadi block saat render PDF */
+        #printable-document.pdf-render-active {
+            display: block !important;
+            width: 210mm !important;
+            height: 290mm !important; /* Paksa tinggi halaman tepat 1 lembar selama proses PDF */
+            max-height: 290mm !important;
+            overflow: hidden !important;
+            gap: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .pdf-render-active .preview-page-container {
+            margin: 0 !important;
+            box-shadow: none !important;
+            padding: 10mm !important;
+            height: 290mm !important;
+            max-height: 290mm !important;
+        }
+
+        /* Atur tinggi bingkai foto dokumentasi agar seragam di semua platform dan mencegah terpotong */
+        .print-photo-frame {
+            height: 160px !important; /* Dioptimalkan menjadi 160px agar muat sempurna 6 foto tanpa terpotong di A4 */
+            width: 100% !important;
+        }
+
+        .print-logo-box {
+            height: 38px !important;
+        }
+
+        .print-title {
+            margin-top: 4px !important;
+            margin-bottom: 4px !important;
+            font-size: 11px !important;
+        }
+
+        .print-meta-table {
+            margin-bottom: 4px !important;
+            font-size: 10px !important;
+        }
+
+        .print-photo-grid td {
+            padding: 3.5px !important;
+        }
+
+        .print-caption-box {
+            min-height: 2.6rem !important;
+            max-height: 2.6rem !important;
+            padding: 4px !important;
+            font-size: 8.5px !important;
+        }
+
+        @media print {
+            body {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-container {
+                border: none !important; /* Garis tepi luar dinonaktifkan untuk fokus pada garis tepi dalam */
+                margin: 0 !important;
+                height: 290mm !important;
+                max-height: 290mm !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Top Navigation Bar (No-Print) -->
+    <header class="no-print bg-white border-b border-slate-200 sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center shadow-md">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" strokeLinejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-base font-bold text-slate-900 tracking-tight">Penyusun Dokumentasi Proyek</h1>
+                <p class="text-xs text-slate-500">Pembangunan Jalan Tol Trans Sumatera (JTTS) Palembang - Betung</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span class="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
+                Sistem Lembar Tunggal A4 (Maksimal 6 Foto)
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden print:block">
+        
+        <!-- Left Section: Inputs & Uploaders (No-Print) -->
+        <section class="no-print lg:col-span-5 bg-white border-r border-slate-200 p-6 overflow-y-auto max-h-[calc(100vh-73px)] space-y-6">
+            <div class="space-y-2">
+                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Formulir Dokumentasi</h2>
+                <p class="text-xs text-slate-500">Silakan masukkan data lapangan secara akurat. Sistem dikunci keras untuk menghasilkan dokumentasi tepat 1 halaman dengan batas maksimal 6 foto.</p>
+            </div>
+
+            <!-- Inputs -->
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Tanggal Kegiatan</label>
+                        <input 
+                            type="date" 
+                            id="input-tanggal"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Lokasi Pekerjaan (STA)</label>
+                        <input 
+                            type="text" 
+                            id="input-lokasi"
+                            placeholder="Contoh: STA 48+250"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Deskripsi Kegiatan</label>
+                    <textarea 
+                        id="input-kegiatan"
+                        rows="3"
+                        placeholder="Tulis detail kegiatan persis seperti yang ingin ditampilkan..."
+                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    ></textarea>
+                </div>
+            </div>
+
+            <!-- Image Upload Grid -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-slate-700 uppercase">Foto Dokumentasi (Maksimal 6 Foto)</label>
+                    <span id="foto-counter" class="text-xs font-bold text-slate-500">0 dari 6 Terunggah</span>
+                </div>
+
+                <!-- Hidden inputs for multi upload -->
+                <input 
+                    type="file" 
+                    id="multi-file-input" 
+                    multiple 
+                    accept="image/*" 
+                    class="hidden"
+                >
+
+                <div 
+                    id="dropzone"
+                    class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-emerald-500 hover:bg-emerald-50/20 transition-all cursor-pointer"
+                >
+                    <svg class="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p class="text-xs font-semibold text-slate-700">Pilih atau Seret Foto ke Sini</p>
+                    <p class="text-[10px] text-slate-400 mt-1">Dukung hingga maksimal 6 foto. Foto portrait maupun landscape tidak akan terpotong.</p>
+                </div>
+
+                <!-- Uploaded images list -->
+                <div class="grid grid-cols-3 gap-2 pt-2" id="preview-grid">
+                    <!-- Slots rendered by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="pt-4 border-t border-slate-100 flex flex-col gap-2">
+                <!-- Direct PDF Download Button -->
+                <button 
+                    type="button" 
+                    id="btn-pdf-download"
+                    onclick="exportToPDF()"
+                    class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 shadow-lg shadow-slate-900/10 transition-all"
+                >
+                    <span id="btn-pdf-text">📥 Unduh Berkas PDF (.pdf)</span>
+                </button>
+                
+                <!-- Browser native print fallback -->
+                <button 
+                    type="button" 
+                    onclick="window.print()"
+                    class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all"
+                >
+                    <span>🖨️ Cetak / Simpan Lewat Browser</span>
+                </button>
+                
+                <button 
+                    type="button" 
+                    onclick="resetForm()"
+                    class="w-full bg-slate-50 hover:bg-slate-100 text-slate-500 font-semibold py-2 px-4 rounded-xl text-xs transition-all"
+                >
+                    Kosongkan Semua Input
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Section: Professional A4 Printable Preview -->
+        <section class="lg:col-span-7 bg-slate-100 p-0 flex flex-col max-h-[calc(100vh-73px)] print:bg-white print:p-0 print:overflow-visible print:max-h-none">
+            
+            <!-- TOOLBAR PRATINJAU INTERAKTIF (No-Print) -->
+            <div class="no-print bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs font-bold text-slate-700">Skala Pratinjau Kertas A4:</span>
+                    <div class="flex items-center space-x-1">
+                        <button type="button" onclick="adjustZoom(-0.05)" class="bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold px-2 py-1 rounded text-xs transition" title="Perkecil">-</button>
+                        <span id="zoom-val" class="text-xs font-mono font-semibold text-slate-800 w-12 text-center">75%</span>
+                        <button type="button" onclick="adjustZoom(0.05)" class="bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 font-bold px-2 py-1 rounded text-xs transition" title="Perbesar">+</button>
+                    </div>
+                    <button type="button" onclick="triggerAutoFit()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded font-medium transition ml-1" title="Tampilan penuh pas layar secara otomatis">Fit Otomatis</button>
+                    <button type="button" onclick="setZoom(1.0)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded font-medium transition" title="Ukuran piksel asli">100%</button>
+                </div>
+                <div class="text-[10px] text-slate-400 font-medium italic">
+                    *Garis tepi hitam sejajar dengan header cetakan
+                </div>
+            </div>
+
+            <!-- Area Kertas Cetak A4 -->
+            <div id="preview-viewport-container" class="flex-1 overflow-y-auto p-6 flex justify-center bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
+                <!-- Standard A4 Sheet Document Container -->
+                <div 
+                    id="printable-document"
+                    class="w-full flex flex-col items-center print:block transition-transform duration-150"
+                >
+                    <!-- Javascript will populate the single page here dynamically -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript logic -->
+    <script>
+        // State variables
+        let uploadedImages = []; 
+        let logosLoaded = { hk: false, pd: false, wk: false };
+        let zoomLevel = 0.75; 
+        let isAutoFitActive = true; // Auto-fit scale on load
+
+        // DOM elements
+        const inputTanggal = document.getElementById('input-tanggal');
+        const inputLokasi = document.getElementById('input-lokasi');
+        const inputKegiatan = document.getElementById('input-kegiatan');
+        
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('multi-file-input');
+        const previewGrid = document.getElementById('preview-grid');
+        const fotoCounter = document.getElementById('foto-counter');
+        const btnPdfDownload = document.getElementById('btn-pdf-download');
+        const btnPdfText = document.getElementById('btn-pdf-text');
+
+        // Initial setup on window load
+        window.onload = function() {
+            // Set current date as default
+            const today = new Date().toISOString().split('T')[0];
+            inputTanggal.value = today;
+            
+            // Preload dan verifikasi pemuatan logo lokal secara aman
+            preloadLogos();
+
+            // Jalankan kalkulasi Fit Otomatis setelah elemen terbuat
+            setTimeout(() => {
+                runAutoFit();
+            }, 300);
+        };
+
+        // Resize Listener untuk menjaga skala pratinjau agar selalu pas di layar monitor
+        window.addEventListener('resize', () => {
+            if (isAutoFitActive) {
+                runAutoFit();
+            }
+        });
+
+        // Verifikasi dan preloading biner gambar logo lokal
+        function preloadLogos() {
+            const hk = new Image();
+            hk.src = "gambar/hk.png";
+            hk.onload = () => { logosLoaded.hk = true; updateDocumentPhotos(); };
+            hk.onerror = () => { logosLoaded.hk = false; updateDocumentPhotos(); };
+
+            const pd = new Image();
+            pd.src = "gambar/pd.png";
+            pd.onload = () => { logosLoaded.pd = true; updateDocumentPhotos(); };
+            pd.onerror = () => { logosLoaded.pd = false; updateDocumentPhotos(); };
+
+            const wk = new Image();
+            wk.src = "gambar/wk.png";
+            wk.onload = () => { logosLoaded.wk = true; updateDocumentPhotos(); };
+            wk.onerror = () => { logosLoaded.wk = false; updateDocumentPhotos(); };
+            
+            updatePreviewMetadata();
+        }
+
+        // Event listeners for inputs to update preview *instantly*
+        inputTanggal.addEventListener('input', updatePreviewMetadata);
+        inputLokasi.addEventListener('input', updatePreviewMetadata);
+        inputKegiatan.addEventListener('input', updatePreviewMetadata);
+
+        function updatePreviewMetadata() {
+            updateDocumentPhotos();
+        }
+
+        // Dropzone & File interaction
+        dropzone.addEventListener('click', () => fileInput.click());
+        
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-emerald-500', 'bg-emerald-50/10');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
+            if (e.dataTransfer.files.length) {
+                handleUploadedFiles(e.dataTransfer.files);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleUploadedFiles(e.target.files);
+            }
+        });
+
+        // Parse files and update state (Capped at maximum of 6 photos)
+        function handleUploadedFiles(files) {
+            const fileList = Array.from(files);
+            
+            fileList.forEach(file => {
+                if (uploadedImages.length >= 6) return; // Hard-capped at 6 photos!
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    uploadedImages.push({
+                        name: file.name,
+                        dataUrl: event.target.result
+                    });
+                    
+                    // Update layout
+                    renderInputSlots();
+                    updateDocumentPhotos();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Render input slots in control side
+        function renderInputSlots() {
+            previewGrid.innerHTML = '';
+            const count = uploadedImages.length;
+            fotoCounter.textContent = `${count} dari 6 Foto Terunggah`;
+
+            uploadedImages.forEach((img, index) => {
+                const slot = document.createElement('div');
+                slot.className = "aspect-square rounded-lg border-2 border-emerald-500 relative overflow-hidden flex flex-col items-center justify-center transition-all bg-slate-50 shadow-sm";
+                slot.innerHTML = `
+                    <img src="${img.dataUrl}" class="w-full h-full object-cover">
+                    <button 
+                        onclick="removeImage(${index}); event.stopPropagation();" 
+                        class="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 shadow transition-all"
+                        title="Hapus Foto"
+                    >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                    <span class="absolute bottom-1 left-1 bg-slate-900/80 text-white text-[8px] font-mono px-1 rounded">
+                        Foto ${index+1}
+                    </span>
+                `;
+                previewGrid.appendChild(slot);
+            });
+
+            // Render Add Button only if uploaded images are less than 6
+            if (uploadedImages.length < 6) {
+                const addSlot = document.createElement('div');
+                addSlot.className = "aspect-square rounded-lg border-2 border-slate-200 border-dashed hover:border-slate-300 hover:bg-slate-100/50 cursor-pointer flex flex-col items-center justify-center transition-all";
+                addSlot.setAttribute('onclick', "document.getElementById('multi-file-input').click()");
+                addSlot.innerHTML = `
+                    <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    <span class="text-[9px] text-slate-400 font-mono mt-1">Tambah</span>
+                `;
+                previewGrid.appendChild(addSlot);
+            }
+        }
+
+        // Remove single image from state
+        window.removeImage = function(index) {
+            uploadedImages.splice(index, 1);
+            renderInputSlots();
+            updateDocumentPhotos();
+        };
+
+        // Sync uploaded images into static single-page A4 template
+        function updateDocumentPhotos() {
+            const printableDocument = document.getElementById('printable-document');
+            printableDocument.innerHTML = ''; // Clear previous
+
+            const rawDate = inputTanggal.value;
+            let formattedDate = "-";
+            if (rawDate) {
+                const parts = rawDate.split('-');
+                formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+            }
+            const lokasiText = inputLokasi.value || "-";
+            const kegiatanText = inputKegiatan.value || "-";
+
+            const pageDiv = document.createElement('div');
+            
+            // Dimensi cetak A4 murni
+            pageDiv.className = "preview-page-container print-container";
+            
+            // Generate Grid Content for this single page (exactly 6 slots)
+            let rowsHtml = '';
+            for (let row = 0; row < 3; row++) {
+                const idx1 = row * 2;
+                const idx2 = row * 2 + 1;
+
+                rowsHtml += `
+                    <tr class="${row < 2 ? 'border-b border-slate-300' : ''} page-break-avoid">
+                        <!-- Left Slot -->
+                        <td class="w-1/2 p-1.5 border-r border-slate-300 align-top">
+                            <div class="flex flex-col items-center">
+                                <!-- max-w-full max-h-full object-contain to ensure un-cropped original images fit perfectly -->
+                                <div class="print-photo-frame w-full h-[160px] bg-slate-100 border border-slate-200 rounded flex items-center justify-center overflow-hidden relative">
+                                    ${uploadedImages[idx1] 
+                                        ? `<img src="${uploadedImages[idx1].dataUrl}" class="max-w-full max-h-full object-contain">`
+                                        : `<span class="text-[9px] text-slate-400 font-mono">DOKUMENTASI FOTO ${idx1 + 1}</span>`
+                                    }
+                                </div>
+                                <div class="print-caption-box w-full mt-1.5 text-[9px] text-slate-700 bg-white p-1.5 rounded border border-slate-200 min-h-[2.6rem] max-h-[2.6rem] leading-tight overflow-hidden">
+                                    <span class="font-bold text-slate-500 block text-[7px] uppercase tracking-wider">Kegiatan:</span>
+                                    <span class="whitespace-pre-line">${uploadedImages[idx1] ? kegiatanText : ''}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <!-- Right Slot -->
+                        <td class="w-1/2 p-1.5 align-top">
+                            <div class="flex flex-col items-center">
+                                <!-- max-w-full max-h-full object-contain to ensure un-cropped original images fit perfectly -->
+                                <div class="print-photo-frame w-full h-[160px] bg-slate-100 border border-slate-200 rounded flex items-center justify-center overflow-hidden relative">
+                                    ${uploadedImages[idx2] 
+                                        ? `<img src="${uploadedImages[idx2].dataUrl}" class="max-w-full max-h-full object-contain">`
+                                        : `<span class="text-[9px] text-slate-400 font-mono">DOKUMENTASI FOTO ${idx2 + 1}</span>`
+                                    }
+                                </div>
+                                <div class="print-caption-box w-full mt-1.5 text-[9px] text-slate-700 bg-white p-1.5 rounded border border-slate-200 min-h-[2.6rem] max-h-[2.6rem] leading-tight overflow-hidden">
+                                    <span class="font-bold text-slate-500 block text-[7px] uppercase tracking-wider">Kegiatan:</span>
+                                    <span class="whitespace-pre-line">${uploadedImages[idx2] ? kegiatanText : ''}</span>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            // Desain Logo Vektor Baru untuk HK: Menghapus bidang poligon biru (fill="#0F4C81") di belakang "HK"
+            // Menggunakan onerror="this.remove();" agar tag img rusak langsung dihapus, mencegah html2canvas macet
+            // Menggunakan properti z-index 2 pada gambar fisik hk.png agar menutup sempurna SVG di bawahnya saat berhasil termuat
+            const hkLogoCell = `
+                <div class="h-10 w-full flex items-center justify-center">
+    <img 
+        src="gambar/hk.png"
+        class="h-10 object-contain"
+        alt="Logo Hutama Karya"
+        onerror="this.style.display='none'"
+    >
+</div>`;
+
+            const pdLogoCell = `
+                <div class="h-10 w-full flex items-center justify-center">
+    <img 
+        src="gambar/pd.png"
+        class="h-10 object-contain"
+        alt="Logo Perentjana karya"
+        onerror="this.style.display='none'"
+    >
+</div>`;
+
+            const wkLogoCell = `
+                <div class="h-10 w-full flex items-center justify-center">
+    <img 
+        src="gambar/wk.png"
+        class="h-10 object-contain"
+        alt="waskita karya"
+        onerror="this.style.display='none'"
+    >
+</div>`;
+
+            // Konstruksi HTML lembar kerja dengan Garis Tepi Dalam yang sejajar dengan sisi terluar Header
+            pageDiv.innerHTML = `
+                <div class="flex-1 border-2 border-black flex flex-col justify-between h-full w-full box-border overflow-hidden bg-white">
+                    
+                    <div>
+                        <!-- 1. HEADER UTAMA - Mengikuti sisi terluar garis tepi dalam secara presisi -->
+                        <table class="w-full border-collapse border-b-2 border-black text-center text-xs">
+                            <tbody>
+                                <tr>
+                                    <td colspan="12" class="p-2 font-bold border-b-2 border-black text-[10px] leading-tight text-center bg-slate-50">
+                                        PELAKSANAAN PEKERJAAN PEMBANGUNAN JALAN TOL TRANS SUMATERA RUAS PALEMBANG - BETUNG<br>
+                                        SEKSI 1 PALEMBANG - RENGAS (STA 42+500 - STA 64+000) DAN SEKSI 2 RENGAS - PANGKALAN BALAI (STA 64+000 - STA 97+000)
+                                    </td>
+                                </tr>
+                                <tr class="font-bold text-[8.5px] bg-slate-50">
+                                    <td colspan="4" class="p-1 border-r-2 border-black w-[33%] uppercase">PENGGUNA JASA :</td>
+                                    <td colspan="4" class="p-1 border-r-2 border-black w-[34%] uppercase">KONSULTAN SUPERVISI :</td>
+                                    <td colspan="4" class="p-1 w-[33%] uppercase">PENYEDIA JASA :</td>
+                                </tr>
+                                <tr class="font-bold text-[10px]">
+                                    <td colspan="4" class="p-2 border-r-2 border-black align-middle text-center bg-white">
+                                        <div class="flex flex-col items-center justify-center space-y-1">
+                                            <div class="h-10 w-full flex items-center justify-center">
+                                                ${hkLogoCell}
+                                            </div>
+                                            <div class="text-[8.5px] text-slate-800 font-bold leading-none uppercase">PT. HUTAMA KARYA (Persero)</div>
+                                        </div>
+                                    </td>
+                                    <td colspan="4" class="p-2 border-r-2 border-black align-middle text-center bg-white">
+                                        <div class="flex flex-col items-center justify-center space-y-1">
+                                            <div class="h-10 flex items-center justify-center">
+                                                ${pdLogoCell}
+                                            </div>
+                                            <div class="text-[8.5px] text-slate-800 font-bold leading-none uppercase">PT. PERENTJANA DJAJA</div>
+                                        </div>
+                                    </td>
+                                    <td colspan="4" class="p-2 align-middle text-center bg-white">
+                                        <div class="flex flex-col items-center justify-center space-y-1">
+                                            <div class="h-10 flex items-center justify-center">
+                                                ${wkLogoCell}
+                                            </div>
+                                            <div class="text-[8.5px] text-slate-800 font-bold leading-none uppercase">PT. WASKITA KARYA (Persero) Tbk</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- KONTEN INTI (Title, Meta, and Photos) -->
+                        <div class="p-2.5 space-y-1.5">
+                            <!-- SUB TITLE -->
+                            <div class="text-center">
+                                <h3 class="print-title text-xs font-black tracking-widest border-b-2 border-black pb-0.5 inline-block px-8 uppercase">
+                                    DOKUMENTASI
+                                </h3>
+                            </div>
+
+                            <!-- 2. METADATA TANGGAL, LOKASI & KEGIATAN -->
+                            <table class="print-meta-table w-full border-collapse text-[10.5px]">
+                                <tbody>
+                                    <tr>
+                                        <td class="w-[12%] font-bold py-0.5">Kegiatan</td>
+                                        <td class="w-[2%] text-center py-0.5">:</td>
+                                        <td class="py-0.5 font-semibold text-slate-900 whitespace-pre-line leading-tight">${kegiatanText}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold py-0.5">Tanggal</td>
+                                        <td class="text-center py-0.5">:</td>
+                                        <td class="py-0.5">${formattedDate}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold py-0.5">Lokasi</td>
+                                        <td class="text-center py-0.5">:</td>
+                                        <td class="py-0.5 font-semibold">${lokasiText}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- 3. TABEL FOTO DOKUMENTASI -->
+                            <div class="border border-slate-300 rounded overflow-hidden bg-slate-50">
+                                <table class="w-full border-collapse print-photo-grid">
+                                    <tbody>
+                                        ${rowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NOTIFIKASI FOOTER HALAMAN DOKUMEN -->
+                    <div class="px-3 pb-2 text-[8.5px] text-slate-400 border-t border-slate-100 pt-1.5 flex justify-between items-center bg-white">
+                        <span>Dokumentasi Pelaksanaan Lapangan JTTS Palembang - Betung</span>
+                        <span>Halaman 1 dari 1</span>
+                    </div>
+                </div>
+            `;
+            printableDocument.appendChild(pageDiv);
+            
+            // Terapkan penyesuaian skala monitor agar muat sempurna
+            applyZoom();
+        }
+
+        // FUNGSI ZOOM PRATINJAU SECARA REAL-TIME DI LAYAR MONITOR
+        function adjustZoom(amount) {
+            isAutoFitActive = false; // Nonaktifkan otomatisasi jika pengguna menekan manual zoom
+            setZoom(zoomLevel + amount);
+        }
+
+        function setZoom(value) {
+            zoomLevel = Math.max(0.4, Math.min(1.5, value));
+            applyZoom();
+        }
+
+        // Mengaktifkan kembali mode Fit Otomatis
+        function triggerAutoFit() {
+            isAutoFitActive = true;
+            runAutoFit();
+        }
+
+        // Kalkulasi Fit Otomatis berdasarkan viewport panel kanan
+        function runAutoFit() {
+            const viewport = document.getElementById('preview-viewport-container');
+            const target = document.getElementById('printable-document');
+            if (!viewport || !target) return;
+
+            // Dapatkan lebar dan tinggi sisa area pandang yang tersedia di monitor
+            const availableWidth = viewport.clientWidth - 48; // Kurangi padding 24px kiri-kanan
+            const availableHeight = viewport.clientHeight - 48; // Kurangi padding 24px atas-bawah
+
+            // Konversi dimensi A4 (210mm x 290mm) ke piksel perkiraan (A4 Rasio)
+            const a4WidthPx = 794; 
+            const a4HeightPx = 1096;
+
+            const scaleX = availableWidth / a4WidthPx;
+            const scaleY = availableHeight / a4HeightPx;
+
+            // Ambil faktor skala terkecil agar seluruh halaman muat tanpa terpotong
+            const optimalScale = Math.min(scaleX, scaleY);
+
+            // Batasi skala minimum di 0.4 dan maksimum di 1.2
+            zoomLevel = Math.max(0.4, Math.min(1.2, optimalScale));
+            applyZoom();
+        }
+
+        function applyZoom() {
+            const doc = document.getElementById('printable-document');
+            if (!doc) return;
+            
+            doc.style.transform = `scale(${zoomLevel})`;
+            doc.style.transformOrigin = 'top center';
+            document.getElementById('zoom-val').textContent = `${Math.round(zoomLevel * 100)}%`;
+            
+            // Berikan kompensasi margin bawah agar tinggi halaman yang menyusut tidak membuat area scroll terlalu panjang ke bawah
+            const pageHeight = 290; // mm (disesuaikan dengan tinggi kontainer)
+            const marginNeeded = (zoomLevel - 1) * pageHeight;
+            doc.style.marginBottom = `${marginNeeded}mm`;
+        }
+
+        window.resetForm = function() {
+            if (confirm("Apakah Anda yakin ingin menghapus seluruh isian data?")) {
+                inputLokasi.value = '';
+                inputKegiatan.value = '';
+                uploadedImages = [];
+                updatePreviewMetadata();
+                renderInputSlots();
+            }
+        };
+
+        // INTEGRASI PROMISE BUFFER - MENANGGULANGI ERROR LOCAL FILE PROTOCOL BREAK
+        window.exportToPDF = function() {
+            const element = document.getElementById('printable-document');
+            const imagesInDoc = element.getElementsByTagName('img');
+            
+            btnPdfDownload.disabled = true;
+            btnPdfText.textContent = "⌛ Menghasilkan PDF...";
+            btnPdfDownload.classList.replace('bg-slate-900', 'bg-slate-500');
+
+            // Gulir jendela ke koordinat paling atas untuk menghindari offset html2canvas
+            window.scrollTo(0, 0);
+
+            // Simpan skala asli pratinjau monitor sebelum dinonaktifkan
+            const originalTransform = element.style.transform;
+            const originalMarginBottom = element.style.marginBottom;
+            
+            // Matikan skala agar engine PDF merender dalam format fisik murni 100% tanpa distorsi pergeseran
+            element.style.transform = 'none';
+            element.style.marginBottom = '0';
+
+            // Kunci Solusi 1: Aktifkan kelas PDF render untuk membuang gap-spacing layar digital & mengubah flexbox menjadi block
+            element.classList.add('pdf-render-active');
+
+            // Kunci Solusi 2: Ambil status 'Complete' dari seluruh biner gambar di memori lokal secara aman
+            // Ditambahkan timeout aman 1.5 detik agar pemrosesan tidak membeku jika ada biner file:/// yang macet
+            const loadPromises = Array.from(imagesInDoc).map(img => {
+                if (!img.src || img.src === window.location.href) return Promise.resolve();
+                if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+                return new Promise(resolve => {
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve(); // Tetap di-resolve agar kegagalan 1 gambar tidak membekukan seluruh proses unduh
+                    setTimeout(resolve, 1500); // Batas waktu darurat 1.5 detik
+                });
+            });
+
+            // Jalankan html2pdf hanya ketika buffer muatan gambar bernilai benar
+            Promise.all(loadPromises).then(() => {
+                // Berikan jeda milidetik pendek agar layout flexbox ke block selesai diaplikasikan browser hulu
+                setTimeout(() => {
+                    const isLocalFile = window.location.protocol === 'file:';
+                    const opt = {
+                        margin:       0,
+                        filename:     `Dokumentasi_${inputTanggal.value || 'Laporan'}_${(inputLokasi.value || 'Lokasi').replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { 
+                            scale: 2, 
+                            useCORS: !isLocalFile, // Nonaktifkan CORS jika dibuka lewat file:/// lokal untuk mencegah kegagalan muat gambar hulu
+                            allowTaint: isLocalFile, // Perbolehkan taint canvas pada sistem lokal file:///
+                            logging: false,
+                            letterRendering: true,
+                            scrollY: 0,
+                            scrollX: 0
+                        },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak:    { mode: 'css' } // Menggunakan model CSS murni untuk menghindari break halaman kosong pada halaman awal
+                    };
+
+                    html2pdf().set(opt).from(element).save().then(() => {
+                        element.classList.remove('pdf-render-active'); // Kembalikan celah layar pratinjau monitor
+                        element.style.transform = originalTransform; // Kembalikan skala monitor semula
+                        element.style.marginBottom = originalMarginBottom;
+                        btnPdfDownload.disabled = false;
+                        btnPdfText.textContent = "📥 Unduh Berkas PDF (.pdf)";
+                        btnPdfDownload.classList.replace('bg-slate-500', 'bg-slate-900');
+                    }).catch(err => {
+                        console.error("Kesalahan internal render:", err);
+                        element.classList.remove('pdf-render-active');
+                        element.style.transform = originalTransform;
+                        element.style.marginBottom = originalMarginBottom;
+                        fallbackPrint();
+                    });
+                }, 150);
+            }).catch(e => {
+                console.error("Gagal memuat buffer:", e);
+                element.classList.remove('pdf-render-active');
+                element.style.transform = originalTransform;
+                element.style.marginBottom = originalMarginBottom;
+                fallbackPrint();
+            });
+        };
+
+        function fallbackPrint() {
+            alert("Terjadi batasan keamanan protokol lokal browser hulu. Dialihkan otomatis ke jendela cetak.");
+            window.print();
+            btnPdfDownload.disabled = false;
+            btnPdfText.textContent = "📥 Unduh Berkas PDF (.pdf)";
+            btnPdfDownload.classList.replace('bg-slate-500', 'bg-slate-900');
+        }
+    </script>
+</body>
+</html>
