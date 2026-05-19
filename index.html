@@ -319,17 +319,17 @@
         // Verifikasi dan preloading biner gambar logo lokal
         function preloadLogos() {
             const hk = new Image();
-            hk.src = "gambar/hk.png";
+            hk.src = "./gambar/hk.png";
             hk.onload = () => { logosLoaded.hk = true; updateDocumentPhotos(); };
             hk.onerror = () => { logosLoaded.hk = false; updateDocumentPhotos(); };
 
             const pd = new Image();
-            pd.src = "gambar/pd.png";
+            pd.src = "./gambar/pd.png";
             pd.onload = () => { logosLoaded.pd = true; updateDocumentPhotos(); };
             pd.onerror = () => { logosLoaded.pd = false; updateDocumentPhotos(); };
 
             const wk = new Image();
-            wk.src = "gambar/wk.png";
+            wk.src = "./gambar/wk.png";
             wk.onload = () => { logosLoaded.wk = true; updateDocumentPhotos(); };
             wk.onerror = () => { logosLoaded.wk = false; updateDocumentPhotos(); };
             
@@ -509,7 +509,7 @@
             const hkLogoCell = `
                 <div class="h-10 w-full flex items-center justify-center">
     <img 
-        src="gambar/hk.png"
+        src="./gambar/hk.png"
         class="h-10 object-contain"
         alt="Logo Hutama Karya"
         onerror="this.style.display='none'"
@@ -519,7 +519,7 @@
             const pdLogoCell = `
                 <div class="h-10 w-full flex items-center justify-center">
     <img 
-        src="gambar/pd.png"
+        src="./gambar/pd.png"
         class="h-10 object-contain"
         alt="Logo Perentjana karya"
         onerror="this.style.display='none'"
@@ -529,7 +529,7 @@
             const wkLogoCell = `
                 <div class="h-10 w-full flex items-center justify-center">
     <img 
-        src="gambar/wk.png"
+        src="./gambar/wk.png"
         class="h-10 object-contain"
         alt="waskita karya"
         onerror="this.style.display='none'"
